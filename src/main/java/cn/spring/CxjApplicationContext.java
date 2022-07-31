@@ -120,55 +120,10 @@ public class CxjApplicationContext {
                   && !beanDefinition.isLazy()) {
                 /* 创建对象,存入SingletonPoolMap */
                 String beanName = stringBeanDefinitionEntry.getKey();
-                Object o = null;
-                try {
-                  /* 获取当前被加载的类的构造方法 */
-                  Class clazz = beanDefinition.getType();
-                  /* 判断是否是有参构造器 */
-                  long count =
-                      Arrays.stream(clazz.getConstructors())
-                          .filter(
-                              constructor -> {
-                                /* 有参构造器 */
-                                if (constructor.getParameterCount() > 0) {
-                                  return true;
-                                }
-                                return false;
-                              })
-                          .count();
-                  /* 该类采用有参构造器 */
-                  if (count > 0) {
-                    /* 此处默认采用第一个有参构造器 */
-                    Constructor constructor = clazz.getConstructors()[0];
-                    /* 获取有参构造器的参数集合 */
-                    Class[] parameterTypes = constructor.getParameterTypes();
-                    /* 获取有参构造器参数对应的内容注解@Value集合 */
-                    Object[] paramterCollecter =
-                        Arrays.stream(constructor.getParameters())
-                            .filter(
-                                parameter -> {
-                                  if (parameter.isAnnotationPresent(Value.class)) {
-                                    return true;
-                                  }
-                                  return false;
-                                })
-                            .map(parameter -> parameter.getAnnotation(Value.class).value())
-                            .toArray();
-                    o = clazz.getDeclaredConstructor(parameterTypes).newInstance(paramterCollecter);
-                  } else {
-                    /* 该类采用无参构造器 */
-                    o = clazz.getDeclaredConstructor().newInstance();
-                  }
-                } catch (InstantiationException e) {
-                  e.printStackTrace();
-                } catch (IllegalAccessException e) {
-                  e.printStackTrace();
-                } catch (InvocationTargetException e) {
-                  e.printStackTrace();
-                } catch (NoSuchMethodException e) {
-                  e.printStackTrace();
-                }
-                singletonPoolMap.put(beanName, o);
+                /* 创建指定Bean*/
+                Class clazz = beanDefinition.getType();
+                Object object = createOneSpecificBean(clazz);
+                singletonPoolMap.put(beanName, object);
               }
             });
   }
@@ -272,6 +227,14 @@ public class CxjApplicationContext {
       } catch (InvocationTargetException e) {
         e.printStackTrace();
       } catch (NoSuchMethodException e) {
+        e.printStackTrace();
+      }
+    }
+    /*初始化工作*/
+    if (o instanceof InitializingBean) {
+      try {
+        ((InitializingBean) o).afterPropertiesSet();
+      } catch (Exception e) {
         e.printStackTrace();
       }
     }

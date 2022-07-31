@@ -1,17 +1,14 @@
 package cn.edu.xaut.service;
 
 import cn.edu.xaut.Appconfig;
-import cn.spring.Autowired;
-import cn.spring.Component;
-import cn.spring.CxjApplicationContext;
-import cn.spring.Lazy;
+import cn.spring.*;
 
 /**
  * @author mr
  */
 @Lazy
 @Component(value = "testAutowired")
-public class TestAutowired {
+public class TestAutowired implements InitializingBean {
   static {
     /*初始化springIoc容器*/
     CxjApplicationContext springIoc = new CxjApplicationContext(Appconfig.class);
@@ -29,5 +26,10 @@ public class TestAutowired {
     System.out.println(orderService.getConstructArgument());
     System.out.println(orderService.getConstructorArgument2());
     userService.test();
+  }
+
+  @Override
+  public void afterPropertiesSet() throws Exception {
+    System.out.println("I am initialing!");
   }
 }
