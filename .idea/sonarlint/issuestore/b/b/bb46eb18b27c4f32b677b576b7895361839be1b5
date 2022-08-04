@@ -1,0 +1,16 @@
+
+c
+java:S1192"MDefine a constant instead of duplicating this literal "orderService" 4 times.(“„ê¾
+g
+java:S1192"LDefine a constant instead of duplicating this literal "userService" 3 times.(Å¡äÖûÿÿÿÿ
+S	java:S106"9Replace this use of System.out or System.err by a logger.(Å¡äÖûÿÿÿÿ
+S	java:S106"9Replace this use of System.out or System.err by a logger.(Å¡äÖûÿÿÿÿ
+S	java:S106"9Replace this use of System.out or System.err by a logger.(Å¡äÖûÿÿÿÿ
+N	java:S106"9Replace this use of System.out or System.err by a logger.(“„ê¾
+E
+java:S1905"/Remove this unnecessary cast to "OrderService".(“„ê¾
+N	java:S106"9Replace this use of System.out or System.err by a logger.(ç„º¨
+N	java:S106"9Replace this use of System.out or System.err by a logger.(“„ê¾
+E
+java:S1905"/Remove this unnecessary cast to "OrderService".(“„ê¾
+N	java:S106"9Replace this use of System.out or System.err by a logger.(ÆÀûý

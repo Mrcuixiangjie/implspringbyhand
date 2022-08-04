@@ -1,18 +1,19 @@
 package cn.spring;
 
+import java.beans.Introspector;
 import java.io.File;
 import java.lang.reflect.Constructor;
+import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 
 /**
  * @author mr
  */
 public class CxjApplicationContext {
   private final Class appconfigClass;
+  private List<BeanPostProcessor> beanPostProcessorList = new ArrayList<>();
 
   public CxjApplicationContext(Class appconfigClass) {
     this.appconfigClass = appconfigClass;
@@ -20,8 +21,6 @@ public class CxjApplicationContext {
     scan();
     /* 装载非懒加载的单例Bean */
     createAllSingletonNoLazyBean();
-    /* 属性填充即@Autowired依赖注入的自动装配 */
-    depententOnInjection();
   }
   /** 扫描并装载BeanDefinition */
   public void scan() {
@@ -65,10 +64,31 @@ public class CxjApplicationContext {
             /* 判断被加载类对象的上面是否存在@Component注解 */
             /* 判断当前被加载类为单例还是多例 */
             if (clazz.isAnnotationPresent(Component.class)) {
+              if (BeanPostProcessor.class.isAssignableFrom(clazz)) {
+                try {
+                  BeanPostProcessor beanPostProcessor =
+                      (BeanPostProcessor) clazz.getDeclaredConstructor().newInstance();
+                  beanPostProcessorList.add(beanPostProcessor);
+                } catch (InstantiationException e) {
+                  e.printStackTrace();
+                } catch (IllegalAccessException e) {
+                  e.printStackTrace();
+                } catch (InvocationTargetException e) {
+                  e.printStackTrace();
+                } catch (NoSuchMethodException e) {
+                  e.printStackTrace();
+                }
+              }
+
               /* 获取@Component注解对象 */
               Component componentAnnotation = clazz.getAnnotation(Component.class);
               /* 获取@Component注解对象里的value值 */
               String beanName = componentAnnotation.value();
+              /*构造默认的bean名字*/
+              if (beanName.equals("")) {
+                beanName = Introspector.decapitalize(clazz.getSimpleName());
+              }
+
               /* 判断是单例bean还是多例bean，判断被加载类上是否存在@Scope注解 */
               if (clazz.isAnnotationPresent(Scope.class)) {
                 /* 被加载类上存在@Scope注解，需要判断注解里的值来判定是单例bean还是多例bean */
@@ -122,47 +142,13 @@ public class CxjApplicationContext {
                 String beanName = stringBeanDefinitionEntry.getKey();
                 /* 创建指定Bean*/
                 Class clazz = beanDefinition.getType();
-                Object object = createOneSpecificBean(clazz);
+                Object object = createOneSpecificBean(beanName, clazz);
                 singletonPoolMap.put(beanName, object);
               }
             });
   }
 
-  /** 属性填充即@Autowired依赖注入的自动装配 */
-  private void depententOnInjection() {
-    /*前期准备，获取BeanDefinitionMap池和SingletonPoolMap池*/
-    HashMap<String, BeanDefinition> beanDefinitionMap = BeanDefinitionMap.getBeanMap();
-    Map<String, Object> singletonPoolMap = SingletonPool.getSingletonPoolMap();
-    beanDefinitionMap.forEach(
-        (beanName, beanDefinition) -> {
-          Class clazz = beanDefinition.getType();
-          Object target = null;
-          if (beanDefinition.getScope().equals(ConstantPool.SINGLETON)
-              && !beanDefinition.isLazy()) {
-            target = singletonPoolMap.get(beanName);
-          } else {
-            target = createOneSpecificBean(clazz);
-          }
-          Object finalTarget = target;
-          Arrays.stream(clazz.getDeclaredFields())
-              .forEach(
-                  field -> {
-                    if (field.isAnnotationPresent(Autowired.class)) {
-                      Object beInjected = singletonPoolMap.get(field.getName());
-                      if (beInjected == null) {
-                        beInjected = createOneSpecificBean(field.getType());
-                      }
-                      try {
-                        field.setAccessible(true);
-                        field.set(finalTarget, beInjected);
-                      } catch (IllegalAccessException e) {
-                        e.printStackTrace();
-                      }
-                    }
-                  });
-        });
-  }
-
+  /** 获取指定bean */
   public Object getBean(String beanName) {
     Object o = null;
     HashMap<String, BeanDefinition> beanDefinitionMap = BeanDefinitionMap.getBeanMap();
@@ -177,25 +163,28 @@ public class CxjApplicationContext {
       /* 单例的 */
       Map<String, Object> singletonPoolMap = SingletonPool.getSingletonPoolMap();
       o = singletonPoolMap.get(beanName);
-      /* 懒加载的bean */
       if (o == null) {
-        o = createOneSpecificBean(beanDefinition.getType());
+        o = createOneSpecificBean(beanName, beanDefinition.getType());
         singletonPoolMap.put(beanName, o);
       }
     } else {
       /* 原型的 */
-      o = createOneSpecificBean(beanDefinition.getType());
+      o = createOneSpecificBean(beanName, beanDefinition.getType());
     }
     return o;
   }
+
   /** 创建指定class的bean对象 */
-  public Object createOneSpecificBean(Class clazz) {
-    Object o = null;
+  public Object createOneSpecificBean(String beanName, Class clazz) {
+    /*前期准备，获取BeanDefinitionMap池和SingletonPoolMap池*/
+    Map<String, Object> singletonPoolMap = SingletonPool.getSingletonPoolMap();
+    Object bean = null;
+    /* 1、实例化bean */
     Constructor constructor = clazz.getConstructors()[0];
     /* 无参构造器 */
     if (constructor.getParameterCount() == 0) {
       try {
-        o = clazz.getDeclaredConstructor().newInstance();
+        bean = clazz.getDeclaredConstructor().newInstance();
       } catch (InstantiationException e) {
         e.printStackTrace();
       } catch (IllegalAccessException e) {
@@ -209,17 +198,17 @@ public class CxjApplicationContext {
       Class[] parameterTypes = constructor.getParameterTypes();
       Object[] parameterValues =
           Arrays.stream(constructor.getParameters())
-              .filter(
+              .map(
                   parameter -> {
                     if (parameter.isAnnotationPresent(Value.class)) {
-                      return true;
+                      return parameter.getAnnotation(Value.class).value();
+                    } else {
+                      return " ";
                     }
-                    return false;
                   })
-              .map(parameter -> parameter.getAnnotation(Value.class).value())
               .toArray();
       try {
-        o = clazz.getDeclaredConstructor(parameterTypes).newInstance(parameterValues);
+        bean = clazz.getDeclaredConstructor(parameterTypes).newInstance(parameterValues);
       } catch (InstantiationException e) {
         e.printStackTrace();
       } catch (IllegalAccessException e) {
@@ -230,27 +219,39 @@ public class CxjApplicationContext {
         e.printStackTrace();
       }
     }
-    /*初始化工作*/
-    if (o instanceof InitializingBean) {
+    /* 2、属性填充即@Autowired依赖注入的自动装配 */
+    for (Field field : clazz.getDeclaredFields()) {
+      if (field.isAnnotationPresent(Autowired.class)) {
+        Object beInjected = getBean(field.getName());
+        try {
+          field.setAccessible(true);
+          field.set(bean, beInjected);
+        } catch (IllegalAccessException e) {
+          e.printStackTrace();
+        }
+      }
+    }
+
+    /* beanNameAware */
+    if (bean instanceof BeanNameAware) {
+      ((BeanNameAware) bean).setBeanName(beanName);
+    }
+    /* 4、处理器增强beanPostProcessor的postProcessBeforeInitialization()方法 */
+    for (BeanPostProcessor beanPostProcessor : beanPostProcessorList) {
+      bean = beanPostProcessor.postProcessBeforeInitialization(bean, beanName);
+    }
+    /*3、初始化工作*/
+    if (bean instanceof InitializingBean) {
       try {
-        ((InitializingBean) o).afterPropertiesSet();
+        ((InitializingBean) bean).afterPropertiesSet();
       } catch (Exception e) {
         e.printStackTrace();
       }
     }
-    return o;
-  }
-  /** URL下的文件集合 */
-  public File getFileDirectory() {
-    if (appconfigClass.isAnnotationPresent(ComponentScan.class)) {
-      ComponentScan appconfigClassAnnotation =
-          (ComponentScan) appconfigClass.getAnnotation(ComponentScan.class);
-      String path = appconfigClassAnnotation.value().replace(".", "/");
-      ClassLoader classLoader = CxjApplicationContext.class.getClassLoader();
-      URL fileDirectoryUrl = classLoader.getResource(path);
-      return new File(fileDirectoryUrl.getFile());
-    } else {
-      return null;
+    /* 4、处理器增强beanPostProcessor的postProcessAfterInitialization()方法 */
+    for (BeanPostProcessor beanPostProcessor : beanPostProcessorList) {
+      bean = beanPostProcessor.postProcessAfterInitialization(bean, beanName);
     }
+    return bean;
   }
 }

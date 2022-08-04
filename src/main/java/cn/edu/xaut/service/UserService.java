@@ -10,7 +10,8 @@ import cn.spring.Scope;
 @Lazy
 @Scope(value = "prototype")
 @Component(value = "userService")
-public class UserService {
+public class UserService implements UserServiceInterface {
+  @Override
   public void test() {
     System.out.println(UserService.class.getResource(""));
   }
